@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}GS Builder{% endblock %}
+{% block content %}
+<h1>🏗️ Gold Standard Builder</h1>
+
+{% if error %}<div class="alert-error">⚠️ {{ error }}</div>{% endif %}
+{% if success %}<div class="alert-success">✅ {{ success }}</div>{% endif %}
+{% if warning %}<div class="alert-error" style="background-color: #fef08a; color: #854d0e; border: 1px solid #fde047;">{{ warning }}</div>{% endif %}
+
+<div class="card">
+    <h2>1. Seleziona dominio e inserisci URL</h2>
+    <form method="post" action="/gs_builder/fetch" style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+        <select name="domain" style="width:220px;" onchange="window.location.href='/gs_builder?domain=' + this.value">
+            {% for d in domains %}
+            <option value="{{ d }}" {% if d == selected_domain %}selected{% endif %}>{{ d }}</option>
+            {% endfor %}
+        </select>
+        <input type="text" name="url" required placeholder="https://dominio.com/pagina..." style="flex:1; min-width:280px;" value="{{ fetched_url or '' }}">
+        <button class="btn btn-primary" type="submit">Scarica HTML</button>
+    </form>
+</div>
+
+{% if error and fetched_url and 'supportat' not in error|lower%}
+<div class="card" style="border: 2px dashed #f59e0b; background-color: #fffbeb;">
+    <h2 style="color: #b45309;">⚠️ Piano B: Inserimento Manuale (Bypass Anti-Bot)</h2>
+    <p style="font-size: 0.9rem; color: #78350f; margin-bottom: 15px;">Dato che il crawler è bloccato, apri la pagina dal tuo browser, copia il codice HTML e incollalo qui insieme al testo estratto.</p>
+    <form id="formPianoB">
+        <input type="hidden" name="domain" value="{{ selected_domain }}">
+        <input type="hidden" name="url" value="{{ fetched_url }}">
+        
+        <label style="font-weight: bold; font-size: 0.9rem; color: #b45309;">1. Incolla l'HTML Grezzo</label>
+        <textarea name="html_text" rows="5" placeholder="<!DOCTYPE html><html>..." style="width: 100%; border: 1px solid #fcd34d; border-radius: 6px; padding: 8px; margin-bottom: 12px; font-family: monospace;"></textarea>
+        
+        <label style="font-weight: bold; font-size: 0.9rem; color: #b45309;">2. Incolla il Testo Gold Standard</label>
+        <textarea name="gold_text" rows="5" placeholder="Il testo informativo pulito..." style="width: 100%; border: 1px solid #fcd34d; border-radius: 6px; padding: 8px; margin-bottom: 12px;"></textarea>
+        
+        <button id="btnSalvaB" class="btn" type="submit" style="background-color: #d97706; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: bold; cursor: pointer;">💾 Salva HTML e Gold Text nel DB</button>
+    </form>
+
+    <script>
+    document.getElementById("formPianoB").addEventListener("submit", async function(e) {
+        e.preventDefault(); 
+        
+        const btn = document.getElementById("btnSalvaB");
+        btn.innerText = "⏳ Salvataggio in corso (potrebbe richiedere qualche secondo)...";
+        btn.disabled = true;
+
+        //Raccoglie i dati e li trasforma in oggetto
+        const formData = new FormData(this);
+        const data = Object.fromEntries(formData.entries());
+
+        try {
+            //JSON per evitare errori di dimensione dei form
+            const response = await fetch("/gs_builder/save_manual_json", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(data)
+            });
+            
+            const result = await response.json();
+            if (result.success) {
+                alert("✅ " + result.message);
+                window.location.href = "/gs_builder?domain=" + encodeURIComponent(data.domain);
+            } else {
+                alert("⚠️ Errore: " + result.error);
+                btn.innerText = "💾 Salva HTML e Gold Text nel DB";
+                btn.disabled = false;
+            }
+        } catch (error) {
+            alert("⚠️ Errore di connessione al server.");
+            btn.innerText = "💾 Salva HTML e Gold Text nel DB";
+            btn.disabled = false;
+        }
+    });
+    </script>
+</div>
+{% endif %}
+
+{% if fetched_html %}
+<div class="card">
+    <h2>2. HTML scaricato — copialo nel browser per estrarre il testo manualmente</h2>
+    <textarea rows="8" readonly style="margin-bottom:16px; width:100%;">{{ fetched_html[:3000] }}{% if fetched_html|length > 3000 %}
+... (troncato per visualizzazione){% endif %}</textarea>
+
+    <h2>3. Incolla il testo gold estratto manualmente</h2>
+    <form method="post" action="/gs_builder/save">
+        <input type="hidden" name="domain" value="{{ selected_domain }}">
+        <input type="hidden" name="url" value="{{ fetched_url }}">
+        <textarea name="gold_text" rows="10" placeholder="Incolla qui il testo informativo estratto manualmente dalla pagina..." style="margin-bottom:12px; width:100%;"></textarea>
+        <button class="btn btn-primary" type="submit">💾 Salva nel DB</button>
+    </form>
+</div>
+{% endif %}
+
+{% if selected_domain %}
+<div class="card">
+    <h2>URL già presenti nel GS per <strong>{{ selected_domain }}</strong></h2>
+    
+    {% if gs_urls %}
+    <ul class="url-list">
+        {% for u in gs_urls %}
+        <li style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <span style="word-break:break-all; color:#334155;">{{ u }}</span>
+            <form method="post" action="/gs_builder/delete" style="flex-shrink:0; margin-left: 10px;" onsubmit="return confirm('⚠️ Sei sicuro di voler eliminare questo Gold Standard? Verranno eliminate in automatico anche tutte le statistiche e le valutazioni associate. L\'operazione è irreversibile.');">
+                <input type="hidden" name="domain" value="{{ selected_domain }}">
+                <input type="hidden" name="url" value="{{ u }}">
+                <button class="btn btn-danger" type="submit" style="padding:4px 12px; font-size:0.8rem;">Elimina</button>
+            </form>
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p style="color:#64748b; font-size:0.9rem; margin-top:10px;">Nessun URL salvato nel Gold Standard per questo dominio.</p>
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}

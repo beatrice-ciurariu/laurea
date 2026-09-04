@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Home — Web Parser{% endblock %}
+{% block content %}
+<h1>🏠 Dashboard</h1>
+
+<div class="card">
+    <h2>Stato del Sistema</h2>
+    <div style="display:flex; gap:16px; flex-wrap:wrap;">
+        <div>Backend &nbsp;<span class="badge {% if status.backend == 'ok' %}badge-ok{% else %}badge-error{% endif %}">{{ status.backend }}</span></div>
+        <div>Database &nbsp;<span class="badge {% if status.database == 'ok' %}badge-ok{% else %}badge-error{% endif %}">{{ status.database }}</span></div>
+        <div>Ollama &nbsp;<span class="badge {% if status.ollama == 'ok' %}badge-ok{% else %}badge-error{% endif %}">{{ status.ollama }}</span></div>
+    </div>
+</div>
+
+<div class="card">
+    <h2>Domini Supportati</h2>
+    {% if domains %}
+    <ul style="list-style:none; display:flex; flex-wrap:wrap; gap:10px; margin-top:8px;">
+        {% for d in domains %}
+        <li style="background:#eff6ff; border:1px solid #dbeafe; border-radius:8px; padding:6px 14px; font-size:0.88rem; color:#1d4ed8; font-weight:600;">{{ d }}</li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p style="color:#94a3b8;">Nessun dominio caricato.</p>
+    {% endif %}
+</div>
+
+<div class="row">
+    <div class="col card" style="text-align:center; cursor:pointer;" onclick="location.href='/parser'">
+        <div style="font-size:2.5rem;">🔬</div>
+        <h2 style="margin-top:10px;">Parser & Evaluation</h2>
+        <p style="color:#64748b; font-size:0.88rem;">Testa i parser su URL live o dal DB, confronta con il Gold Standard e valuta con LLM.</p>
+    </div>
+    <div class="col card" style="text-align:center; cursor:pointer;" onclick="location.href='/gs_builder'">
+        <div style="font-size:2.5rem;">🏗️</div>
+        <h2 style="margin-top:10px;">GS Builder</h2>
+        <p style="color:#64748b; font-size:0.88rem;">Aggiungi e gestisci il Gold Standard nel database.</p>
+    </div>
+    <div class="col card" style="text-align:center; cursor:pointer;" onclick="location.href='/stats'">
+        <div style="font-size:2.5rem;">📊</div>
+        <h2 style="margin-top:10px;">Statistiche</h2>
+        <p style="color:#64748b; font-size:0.88rem;">Panoramica aggregata delle metriche per tutti i domini.</p>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,35 @@
+{
+  "urls": {
+        "https://www.fifa.com/it/the-best-fifa-football-awar1s/articles/lionel-messi-recordo-argentina": "html_files/fifa_leo_messi.html",
+        "https://www.fifa.com/it/tournaments/mens/worldcup/articles/marcos-coll-colombia-gol-olimpico-1962": "html_files/fifa_marcos_coll.html",
+        "https://www.fifa.com/it/tournaments/mens/worldcup/canadamexicousa2026/articles/gol-semi-finali": "html_files/fifa_gol_semifinali.html",
+        "https://www.fifa.com/it/tournaments/mens/worldcup/canadamexicousa2026/qualifiers/uefa/standings": "html_files/fifa_uefa_standings.html",
+        "https://www.fifa.com/it/tournaments/mens/worldcup/canadamexicousa2026/articles/26-superstar-cristiano-ronaldo-star-mondiali" : "html_files/fifa_cristiano_ronaldo.html",
+        "https://www.fifa.com/it/tournaments/womens/womensworldcup/brazil-2027/articles/uefa-qualificazioni-giornata-quattro" : "html_files/fifa_femminili_gironi.html",
+        "https://www.fifa.com/it/tournaments/mens/worldcup/canadamexicousa2026/articles/francia-svezia-cronaca-partita-highlights" : "html_files/fifa_mbappe.html",
+        "https://www.fifa.com/it/tournaments/mens/worldcup/canadamexicousa2026/articles/norvegia-reazioni-erling-haaland-patrick-berg-stale-solbakken" : "html_files/fifa_norvegia.html",
+        "https://www.fifa.com/it/tournaments/mens/worldcup/canadamexicousa2026/articles/repubblica-democratica-congo-uzbekistan-highlights-mondiali-report-partita-coppa-del-mondo-2026" : "html_files/fifa_congo.html",
+        "https://www.fifa.com/it/tournaments/mens/worldcup/canadamexicousa2026/articles/croazia-luka-modric-mondiali-2026-portogallo" : "html_files/fifa_croazia.html",
+
+        "https://www.espn.com/nfl/player/stats/_/id/12514/lesean-mccoy" : "html_files/espn_lesean_mccoy.html", 
+        "https://www.espn.com/womens-college-basketball/story/_/id/45821629/how-womens-college-basketball-five-star-commits-2026-espnw-100-class-fit-new-school" : "html_files/espn_womens_college_basketball.html",
+        "https://www.espn.com/nba/story/_/id/48555708/spurs-wembanyama-concussion-protocol-exits-vs-blazers" : "html_files/espn_wembanyama_concussion.html",
+        "https://www.espn.com/nba/story/_/id/48506452/2026-nba-playoffs-western-conference-round-one-takeaways" : "html_files/espn_western_conference.html",
+        "https://www.espn.com/golf/story/_/id/48603311/nelly-korda-wins-chevron-championship-reclaim-world-no-1" : "html_files/espn_nelly_korda.html",
+        "https://www.espn.com/fantasy/womens-basketball/story/_/id/48582301/espn-wnba-fantasy-womens-basketball-free-agent-trades-upgrade" : "html_files/espn_women_basketball.html",
+        "https://www.espn.com/nfl/story/_/id/48592782/new-england-patriots-aj-brown-trade-compensation-eagles-2026-nfl-draft-recap" : "html_files/espn_aj_brown.html",
+        "https://www.espn.com/racing/nascar/story/_/id/48572580/were-just-getting-going-spire-motorsports-nascar-next-great-team" : "html_files/espn_racing.html",
+  
+        "https://finance.yahoo.com/markets/stocks/article/boeing-q1-results-top-estimates-as-improving-jet-deliveries-cut-losses-173026652.html" : "html_files/yahoo_boeing_q1.html",
+        "https://finance.yahoo.com/markets/stocks/articles/sandisk-stock-biggest-ai-winner-202300142.html" : "html_files/yahoo_sandisk_stock.html",
+        "https://finance.yahoo.com/economy/policy/live/fed-confirmation-hearing-live-kevin-warsh-faces-senate-lawmakers-214813901.html" : "html_files/yahoo_kevin_warsh.html",
+        "https://finance.yahoo.com/markets/stocks/articles/billionaire-warren-buffett-said-really-203105793.html" : "html_files/yahoo_billionaire_warren.html",
+        "https://finance.yahoo.com/sectors/energy/articles/oil-rises-hormuz-remains-shut-050852160.html" : "html_files/yahoo_oil_prices.html",
+        "https://finance.yahoo.com/markets/article/a-return-to-optimism-wall-street-strategists-are-bullish-on-the-ai-trade-143000172.html" : "html_files/yahoo_ai_trade.html",
+        "https://finance.yahoo.com/sectors/technology/articles/vast-data-valued-30-billion-151520245.html" : "html_files/yahoo_nvidia_backed.html",
+        "https://finance.yahoo.com/sectors/technology/articles/intel-results-show-supply-chain-160155896.html" : "html_files/yahoo_intel_results.html",
+        "https://finance.yahoo.com/sectors/technology/articles/openai-leans-global-consultancies-expand-135737840.html" : "html_files/yahoo_openai_codex.html",
+        "https://finance.yahoo.com/quote/TSLA?p=TSLA&.tsrc=fin-srch" : "html_files/yahoo_tsla.html"
+    
+    }
+}

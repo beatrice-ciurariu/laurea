@@ -1,0 +1,59 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - "8003:8003"
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    volumes:
+      - ./gs_data:/app/gs_data 
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    ports:
+      - "8004:8004"
+    depends_on:
+      - backend
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: lab_ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ./ollama_data:/root/.ollama
+    entrypoint: [ "/bin/sh", "-c", "ollama serve & sleep 5 && ollama pull llama3.2:3b && wait" ]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -x ollama >/dev/null && test -f /root/.ollama/models/manifests/registry.ollama.ai/library/llama3.2/3b"]
+      start_period: 10s
+      interval: 10s
+      timeout: 5s
+      retries: 120
+  
+  mariadb:
+    image: mariadb:10.11
+    container_name: lab_mariadb
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: parserdb
+      MYSQL_USER: parser
+      MYSQL_PASSWORD: parserpass
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./mariadb_data:/var/lib/mysql
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      start_period: 10s
+      interval: 5s
+      timeout: 5s
+      retries: 10

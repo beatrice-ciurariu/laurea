@@ -1,0 +1,7 @@
+fastapi
+uvicorn
+beautifulsoup4
+mistune
+httpx
+pydantic
+mariadb

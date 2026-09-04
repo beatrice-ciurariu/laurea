@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}Parser & Eval{% endblock %}
+{% block content %}
+<h1>🔬 Parser & Evaluation</h1>
+
+<div class="card">
+    <h2>Inserisci URL manuale</h2>
+    <form method="post" action="/parser" style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+        <input type="text" name="url" required placeholder="https://esempio.com/articolo..." style="flex:1; min-width:300px;">
+        <select name="mode" style="width:140px;">
+            <option value="live">🌐 Live</option>
+            <option value="local">💾 Local (DB)</option>
+        </select>
+        <button class="btn btn-primary" type="submit">Analizza</button>
+    </form>
+</div>
+
+{% if gs_urls %}
+<div class="card">
+    <h2>Oppure seleziona dal Gold Standard</h2>
+    <form method="post" action="/parser" style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+        <select name="url" style="flex:1;">
+            {% for u in gs_urls %}
+            <option value="{{ u }}">{{ u }}</option>
+            {% endfor %}
+        </select>
+        <select name="mode" style="width:140px;">
+            <option value="live">🌐 Live</option>
+            <option value="local">💾 Local (DB)</option>
+        </select>
+        <button class="btn btn-secondary" type="submit">Test vs GS</button>
+    </form>
+</div>
+{% endif %}
+
+{% if error %}
+<div class="alert-error">⚠️ {{ error }}</div>
+{% endif %}
+
+{% if result and result.parsed %}
+<div class="card">
+    <h2>📄 Risultato Parsing — <small style="color:#64748b;">{{ result.parsed.url }}</small></h2>
+    <div class="row">
+        <div class="col">
+            <h2>HTML Grezzo</h2>
+            <textarea rows="14" readonly>{{ result.parsed.html_text }}</textarea>
+        </div>
+        <div class="col">
+            <h2>Testo Parsato (Markdown)</h2>
+            <textarea rows="14" readonly>{{ result.parsed.parsed_text }}</textarea>
+        </div>
+    </div>
+</div>
+
+{% if result.gs %}
+<div class="card">
+    <h2>📏 Confronto con Gold Standard</h2>
+    <div class="row">
+        <div class="col">
+            <h2>Output Parser</h2>
+            <textarea rows="12" readonly>{{ result.parsed.parsed_text }}</textarea>
+        </div>
+        <div class="col">
+            <h2>Gold Standard</h2>
+            <textarea rows="12" readonly style="border-color:#fde68a;">{{ result.gs.gold_text }}</textarea>
+        </div>
+    </div>
+
+    {% if result.eval %}
+    <div class="stat-grid" style="margin-top:20px;">
+        <div class="stat-box">
+            <div class="val">{{ "%.3f"|format(result.eval.token_level_eval.precision) }}</div>
+            <div class="lbl">Precision</div>
+        </div>
+        <div class="stat-box">
+            <div class="val">{{ "%.3f"|format(result.eval.token_level_eval.recall) }}</div>
+            <div class="lbl">Recall</div>
+        </div>
+        <div class="stat-box" style="background:#1d4ed8; border-color:#1d4ed8;">
+            <div class="val" style="color:white;">{{ "%.3f"|format(result.eval.token_level_eval.f1) }}</div>
+            <div class="lbl" style="color:#bfdbfe;">F1 Score</div>
+        </div>
+    </div>
+
+    {% if result.eval.judge_score and result.eval.judge_score > 0 %}
+    <div style="margin-top:20px; background:#f8fafc; border:1px solid #cbd5e1; border-radius:10px; padding:20px;">
+        <h2>🤖 Giudizio LLM — {{ result.eval.model_name }}</h2>
+        <div style="display:flex; align-items:center; gap:20px; margin-top:10px;">
+            <div style="font-size:3rem; font-weight:800; color:
+                {% if result.eval.judge_score >= 4 %}#16a34a
+                {% elif result.eval.judge_score == 3 %}#ca8a04
+                {% else %}#dc2626{% endif %};">
+                {{ result.eval.judge_score }}/5
+            </div>
+            <div style="font-style:italic; color:#475569;">"{{ result.eval.judge_feedback }}"</div>
+        </div>
+    </div>
+    {% endif %}
+    {% endif %}
+</div>
+{% endif %}
+{% endif %}
+{% endblock %}

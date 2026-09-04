@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Statistiche{% endblock %}
+{% block content %}
+<h1>📊 Statistiche Aggregate</h1>
+
+{% if error %}<div class="alert-error">⚠️ {{ error }}</div>{% endif %}
+
+<div class="card">
+    <h2>Ricalcola metriche per tutti i domini</h2>
+    <p style="color:#64748b; font-size:0.88rem; margin-bottom:12px;">
+        Esegue il parsing e la valutazione LLM su tutto il GS. Operazione lenta.
+    </p>
+    <form method="post" action="/stats/recalc">
+        <button class="btn btn-primary" type="submit">🔄 Ricalcola tutto</button>
+    </form>
+</div>
+
+{% if stats %}
+<div class="card">
+    <h2>Risorse nel Database</h2>
+    <table>
+        <thead>
+            <tr><th>Dominio</th><th>Web Resources</th><th>Gold Standard</th></tr>
+        </thead>
+        <tbody>
+            {% for domain in stats.web_resources %}
+            <tr>
+                <td><strong>{{ domain }}</strong></td>
+                <td>{{ stats.web_resources[domain] }}</td>
+                <td>{{ stats.gold_standard.get(domain, 0) }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% if stats.avg_eval %}
+<div class="card">
+    <h2>Metriche Medie per Dominio</h2>
+    <table>
+        <thead>
+            <tr><th>Dominio</th><th>Precision</th><th>Recall</th><th>F1</th><th>Judge Score</th></tr>
+        </thead>
+        <tbody>
+            {% for domain in stats.avg_eval %}
+            <tr>
+                <td><strong>{{ domain }}</strong></td>
+                {% set ev = stats.avg_eval[domain].token_level_eval %}
+                <td>{{ "%.3f"|format(ev.precision) }}</td>
+                <td>{{ "%.3f"|format(ev.recall) }}</td>
+                <td><strong>{{ "%.3f"|format(ev.f1) }}</strong></td>
+                <td>
+                    {% if stats.avg_eval_judge and domain in stats.avg_eval_judge %}
+                        {{ "%.2f"|format(stats.avg_eval_judge[domain].judge_score) }}/5
+                    {% else %}—{% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="card">
+    <p style="color:#94a3b8;">Nessuna metrica disponibile.</p>
+</div>
+{% endif %}
+{% endif %}
+{% endblock %}
