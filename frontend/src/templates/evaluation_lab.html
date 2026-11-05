@@ -1,0 +1,310 @@
+{% extends "base.html" %}
+{% block title %}Evaluation Lab — Web Parser{% endblock %}
+{% block content %}
+<style>
+    .judge-comparison { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+    .judge-comparison > .card { margin-bottom: 0; min-width: 0; }
+    @media (max-width: 720px) { .judge-comparison { grid-template-columns: 1fr; } }
+</style>
+<h1>🧪 Evaluation Lab</h1>
+<div class="card">
+    <p style="color:#475569; margin-bottom:16px;">Esegui un esperimento alla volta usando l'HTML locale del documento selezionato. Le metriche avanzate possono richiedere alcuni minuti; i due Judge vengono eseguiti in sequenza.</p>
+    {% if error %}<div class="alert-error" role="alert">{{ error }}</div>{% endif %}
+    <form method="get" action="/evaluation-lab" style="margin-bottom:16px;">
+        <label for="domain"><strong>Dominio</strong></label>
+        <select id="domain" name="domain" onchange="this.form.submit()" style="margin-top:6px;">
+            {% for domain in domains %}
+            <option value="{{ domain }}" {% if domain == selected_domain %}selected{% endif %}>{{ domain }}</option>
+            {% endfor %}
+        </select>
+    </form>
+    <form id="evaluation-form">
+        <input type="hidden" name="domain" value="{{ selected_domain }}">
+        <div style="margin-bottom:14px;">
+            <label for="url"><strong>Documento con Gold Standard</strong></label>
+            <select id="url" name="url" required style="margin-top:6px;" {% if not urls %}disabled{% endif %}>
+                {% for url in urls %}<option value="{{ url }}">{{ url }}</option>{% endfor %}
+            </select>
+            {% if not urls %}<p style="color:#64748b; margin-top:6px;">Nessun URL con Gold Standard disponibile per questo dominio.</p>{% endif %}
+        </div>
+        <div style="margin-bottom:18px;">
+            <label for="language"><strong>Lingua METEOR</strong></label>
+            <select id="language" name="language" style="margin-top:6px; max-width:180px;">
+                <option value="en">Inglese</option>
+                <option value="it">Italiano</option>
+            </select>
+        </div>
+        <div style="margin-bottom:18px; max-width:360px;">
+            <label for="model_name"><strong>Modello LLM Judge (entrambi i Judge)</strong></label>
+            <select id="model_name" name="model_name" style="margin-top:6px;">
+                {% for model in judge_models %}
+                <option value="{{ model }}" {% if model == default_judge_model %}selected{% endif %}>{{ model }}</option>
+                {% endfor %}
+            </select>
+            <p style="color:#64748b; font-size:0.85rem; margin-top:6px;">Gemma 3 viene scaricato automaticamente al primo avvio. Se non è ancora disponibile, il Judge mostrerà lo stato di errore senza un punteggio.</p>
+        </div>
+        <div class="row" style="margin-bottom:18px; flex-wrap:wrap;">
+            <div class="col" style="min-width:180px;">
+                <label for="timeout_seconds"><strong>Timeout Judge (secondi)</strong></label>
+                <input id="timeout_seconds" name="timeout_seconds" type="number" min="30" max="600" step="1" value="240" required style="margin-top:6px;">
+            </div>
+            <div class="col" style="min-width:180px;">
+                <label for="max_html_chars"><strong>Campione HTML / Gold Standard (caratteri)</strong></label>
+                <input id="max_html_chars" name="max_html_chars" type="number" min="500" max="12000" step="100" value="4000" required style="margin-top:6px;">
+            </div>
+            <div class="col" style="min-width:180px;">
+                <label for="max_parsed_chars"><strong>Campione testo parsato (caratteri)</strong></label>
+                <input id="max_parsed_chars" name="max_parsed_chars" type="number" min="500" max="12000" step="100" value="4000" required style="margin-top:6px;">
+            </div>
+        </div>
+        <button id="run-button" class="btn btn-primary" type="submit" {% if not urls %}disabled{% endif %}>Esegui esperimento</button>
+        <button id="export-button" class="btn" type="button" disabled style="margin-left:8px;">Esporta risultato JSON</button>
+        <span id="run-status" role="status" aria-live="polite" style="margin-left:12px; color:#475569;"></span>
+    </form>
+</div>
+
+<div id="results" aria-live="polite"></div>
+
+<script>
+(() => {
+    const form = document.getElementById("evaluation-form");
+    const button = document.getElementById("run-button");
+    const exportButton = document.getElementById("export-button");
+    const urlSelect = document.getElementById("url");
+    const modelSelect = document.getElementById("model_name");
+    const experimentControls = [
+        urlSelect,
+        modelSelect,
+        document.getElementById("language"),
+        document.getElementById("timeout_seconds"),
+        document.getElementById("max_html_chars"),
+        document.getElementById("max_parsed_chars")
+    ];
+    const status = document.getElementById("run-status");
+    const results = document.getElementById("results");
+    let running = false;
+    let latestExport = null;
+    let latestExportFilename = null;
+
+    function clearCurrentExperiment() {
+        latestExport = null;
+        latestExportFilename = null;
+        exportButton.disabled = true;
+        results.replaceChildren();
+        status.textContent = "";
+    }
+    experimentControls.forEach(control => control.addEventListener("change", clearCurrentExperiment));
+
+    exportButton.addEventListener("click", () => {
+        if (!latestExport || !latestExportFilename) return;
+        const jsonBlob = new Blob([JSON.stringify(latestExport, null, 2)], {
+            type: "application/json;charset=utf-8"
+        });
+        const objectUrl = URL.createObjectURL(jsonBlob);
+        const link = document.createElement("a");
+        link.href = objectUrl;
+        link.download = latestExportFilename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+    });
+
+    function card(title) {
+        const section = document.createElement("section");
+        section.className = "card";
+        const heading = document.createElement("h2");
+        heading.textContent = title;
+        section.appendChild(heading);
+        return section;
+    }
+    function valueLine(parent, label, value) {
+        const p = document.createElement("p");
+        p.style.margin = "8px 0";
+        const strong = document.createElement("strong");
+        strong.textContent = label + ": ";
+        p.append(strong, document.createTextNode(value === null || value === undefined ? "Non disponibile" : String(value)));
+        parent.appendChild(p);
+    }
+    function showStage(title, stage, render) {
+        const section = card(title);
+        const badge = document.createElement("span");
+        badge.className = "badge " + (stage && stage.status === "success" ? "badge-ok" : "badge-error");
+        badge.textContent = stage ? stage.status : "non disponibile";
+        section.appendChild(badge);
+        if (stage && stage.status === "success" && stage.result) render(section, stage.result);
+        else if (stage && stage.error) valueLine(section, "Errore", stage.error.message || stage.error);
+        else valueLine(section, "Esito", "Risultato non disponibile");
+        if (stage && stage.configuration) {
+            const details = document.createElement("details");
+            const summary = document.createElement("summary");
+            summary.textContent = "Configurazione del Judge";
+            const pre = document.createElement("pre");
+            pre.style.whiteSpace = "pre-wrap";
+            pre.style.marginTop = "10px";
+            pre.textContent = JSON.stringify(stage.configuration, null, 2);
+            details.append(summary, pre);
+            section.appendChild(details);
+        }
+        results.appendChild(section);
+    }
+    function judgeCard(title, stage) {
+        const section = card(title);
+        const badge = document.createElement("span");
+        badge.className = "badge " + (stage && stage.status === "success" ? "badge-ok" : "badge-error");
+        badge.textContent = stage ? stage.status : "non disponibile";
+        section.appendChild(badge);
+        if (stage && stage.status === "success" && stage.result) {
+            const result = stage.result;
+            const dimensions = result.dimensions || {};
+            ["completeness", "fidelity", "noise", "readability"].forEach(key => valueLine(section, key, dimensions[key]));
+            valueLine(section, "Punteggio complessivo (media delle quattro dimensioni)", result.overall_score);
+            valueLine(section, "Feedback", result.feedback);
+            valueLine(section, "Evidenze supportate", JSON.stringify((result.evidence || {}).supported || []));
+            valueLine(section, "Evidenze non supportate", JSON.stringify((result.evidence || {}).unsupported || []));
+            valueLine(section, "Evidenze non verificabili", JSON.stringify((result.evidence || {}).unverifiable || []));
+        } else if (stage && stage.error) {
+            const error = typeof stage.error === "object" ? (stage.error.message || JSON.stringify(stage.error)) : stage.error;
+            valueLine(section, "Errore", error);
+        } else {
+            valueLine(section, "Esito", "Risultato non disponibile");
+        }
+        if (stage && stage.configuration) {
+            const details = document.createElement("details");
+            const summary = document.createElement("summary");
+            summary.textContent = "Configurazione e campionamento";
+            const pre = document.createElement("pre");
+            pre.style.whiteSpace = "pre-wrap";
+            pre.style.overflowWrap = "anywhere";
+            pre.style.marginTop = "10px";
+            pre.textContent = JSON.stringify(stage.configuration, null, 2);
+            details.append(summary, pre);
+            section.appendChild(details);
+        }
+        return section;
+    }
+    function validJudge(stage) {
+        if (!stage || stage.status !== "success" || !stage.result) return false;
+        const dimensions = stage.result.dimensions || {};
+        return ["completeness", "fidelity", "noise", "readability"].every(key => Number.isFinite(dimensions[key]))
+            && Number.isFinite(stage.result.overall_score);
+    }
+    function showJudgeComparison(noGs, withGs) {
+        const note = card("Confronto tra i Judge");
+        const explanation = document.createElement("p");
+        explanation.textContent = "Le rubriche e la scala 1–5 coincidono, ma le fonti di evidenza sono diverse: il Judge con GS confronta con il Gold Standard; quello senza GS usa il testo visibile selezionato dall'HTML. I punteggi non sono necessariamente equivalenti.";
+        note.appendChild(explanation);
+        results.appendChild(note);
+
+        const columns = document.createElement("div");
+        columns.className = "judge-comparison";
+        columns.appendChild(judgeCard("Judge senza Gold Standard — evidenza: HTML", noGs));
+        columns.appendChild(judgeCard("Judge con Gold Standard — evidenza: GS", withGs));
+        results.appendChild(columns);
+
+        if (validJudge(noGs) && validJudge(withGs)) {
+            const differences = card("Differenze assolute tra i punteggi validi");
+            const left = noGs.result;
+            const right = withGs.result;
+            ["completeness", "fidelity", "noise", "readability"].forEach(key => {
+                valueLine(differences, key, Math.abs(left.dimensions[key] - right.dimensions[key]).toFixed(2));
+            });
+            valueLine(differences, "overall_score", Math.abs(left.overall_score - right.overall_score).toFixed(2));
+            results.appendChild(differences);
+        }
+    }
+    function showUnavailableModelNotice(modelName, noGs, withGs) {
+        if (modelName !== "gemma3:4b") return;
+        if (![noGs, withGs].some(stage => stage && stage.status === "model_error")) return;
+        const notice = card("Gemma 3 non disponibile");
+        valueLine(notice, "Stato", "Il pull automatico potrebbe essere ancora in corso oppure non essere riuscito. Nessun punteggio è stato prodotto per la valutazione fallita; puoi selezionare llama3.2:3b.");
+        results.appendChild(notice);
+    }
+
+    form.addEventListener("submit", async event => {
+        event.preventDefault();
+        if (running || !urlSelect.value) return;
+        running = true;
+        button.disabled = true;
+        experimentControls.forEach(control => { control.disabled = true; });
+        latestExport = null;
+        latestExportFilename = null;
+        exportButton.disabled = true;
+        results.replaceChildren();
+        const body = {
+            domain: form.elements.domain.value,
+            url: urlSelect.value,
+            language: document.getElementById("language").value,
+            model_name: form.elements.model_name.value,
+            timeout_seconds: Number(form.elements.timeout_seconds.value),
+            max_html_chars: Number(form.elements.max_html_chars.value),
+            max_parsed_chars: Number(form.elements.max_parsed_chars.value)
+        };
+        status.textContent = `Parsing locale e valutazioni in sequenza in corso con ${body.model_name}; ciascun Judge ha timeout ${body.timeout_seconds} s…`;
+        try {
+            const response = await fetch("/evaluation-lab/run", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify(body)
+            });
+            const data = await response.json();
+            if (!response.ok || data.status !== "success") {
+                const section = card("Esperimento non completato");
+                valueLine(section, "Errore", data.error || `HTTP ${response.status}`);
+                results.appendChild(section);
+                status.textContent = "Esperimento non completato.";
+                return;
+            }
+            if (data.export && data.export_filename) {
+                latestExport = data.export;
+                latestExportFilename = data.export_filename;
+                exportButton.disabled = false;
+            }
+            const documentCard = card("Documento e parser");
+            valueLine(documentCard, "URL", data.document.url);
+            valueLine(documentCard, "Sorgente HTML", "HTML locale salvato nel database");
+            valueLine(documentCard, "Testo parsato", `${data.parser.parsed_text.length} caratteri`);
+            results.appendChild(documentCard);
+
+            showStage("Metriche originali — token-level", data.evaluations.original, (section, result) => {
+                const metrics = result.token_level_eval || {};
+                valueLine(section, "Precision", metrics.precision);
+                valueLine(section, "Recall", metrics.recall);
+                valueLine(section, "F1", metrics.f1);
+            });
+            showStage("Metriche avanzate", data.evaluations.advanced, (section, result) => {
+                valueLine(section, "METEOR", result.meteor && result.meteor.score);
+                if (result.meteor) valueLine(section, "Lingua METEOR", result.meteor.language);
+                const bert = result.bertscore || {};
+                valueLine(section, "BERTScore Precision", bert.precision);
+                valueLine(section, "BERTScore Recall", bert.recall);
+                valueLine(section, "BERTScore F1", bert.f1);
+                if (Object.keys(bert).length) {
+                    const details = document.createElement("details");
+                    const summary = document.createElement("summary");
+                    summary.textContent = "Configurazione BERTScore";
+                    const pre = document.createElement("pre");
+                    pre.style.whiteSpace = "pre-wrap";
+                    pre.style.marginTop = "10px";
+                    pre.textContent = JSON.stringify(bert, null, 2);
+                    details.append(summary, pre);
+                    section.appendChild(details);
+                }
+            });
+            showJudgeComparison(data.evaluations.judge_no_gs, data.evaluations.judge_with_gs);
+            showUnavailableModelNotice(data.model_name, data.evaluations.judge_no_gs, data.evaluations.judge_with_gs);
+            status.textContent = "Esperimento completato. Controlla separatamente lo stato di ogni valutazione.";
+        } catch (error) {
+            const section = card("Errore di comunicazione");
+            valueLine(section, "Dettaglio", error.message || "Risposta non valida dal frontend.");
+            results.appendChild(section);
+            status.textContent = "Esperimento interrotto.";
+        } finally {
+            running = false;
+            button.disabled = false;
+            experimentControls.forEach(control => { control.disabled = false; });
+        }
+    });
+})();
+</script>
+{% endblock %}

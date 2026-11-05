@@ -10,8 +10,31 @@ services:
         condition: service_healthy
       ollama:
         condition: service_healthy
+      advanced-assets:
+        condition: service_completed_successfully
+    environment:
+      NLTK_DATA: /opt/advanced-assets/nltk_data
+      HF_HOME: /opt/advanced-assets/huggingface
+      BERTSCORE_MODEL_PATH: /opt/advanced-assets/models/bert-base-multilingual-cased
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
     volumes:
-      - ./gs_data:/app/gs_data 
+      - ./gs_data:/app/gs_data
+      - advanced_evaluation_cache:/opt/advanced-assets
+
+  advanced-assets:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: ["python", "prepare_advanced_assets.py"]
+    environment:
+      NLTK_DATA: /opt/advanced-assets/nltk_data
+      HF_HOME: /opt/advanced-assets/huggingface
+      BERTSCORE_MODEL_PATH: /opt/advanced-assets/models/bert-base-multilingual-cased
+      BERTSCORE_MODEL_REVISION: ${BERTSCORE_MODEL_REVISION:-main}
+    volumes:
+      - advanced_evaluation_cache:/opt/advanced-assets
+    restart: "no"
 
   frontend:
     build:
@@ -29,7 +52,7 @@ services:
       - "11434:11434"
     volumes:
       - ./ollama_data:/root/.ollama
-    entrypoint: [ "/bin/sh", "-c", "ollama serve & sleep 5 && ollama pull llama3.2:3b && wait" ]
+    entrypoint: [ "/bin/sh", "-c", "ollama serve & sleep 5 && ollama pull llama3.2:3b && (ollama pull gemma3:4b || echo 'WARNING: gemma3:4b pull failed; llama3.2:3b remains available') && wait" ]
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pgrep -x ollama >/dev/null && test -f /root/.ollama/models/manifests/registry.ollama.ai/library/llama3.2/3b"]
@@ -57,3 +80,6 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+
+volumes:
+  advanced_evaluation_cache:

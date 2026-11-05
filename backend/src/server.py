@@ -1,7 +1,8 @@
 import asyncio
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-from typing import Optional
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
+from typing import Literal, Optional
 from contextlib import asynccontextmanager
 from parser_router import get_parser
 from evaluation import evaluate
@@ -11,6 +12,25 @@ import traceback
 import httpx
 from database import get_connection
 from judge import MODEL_NAME, esegui_llm_judge
+from advanced_metrics import (
+    MetricDependencyError,
+    MetricInputSizeError,
+    bertscore_eval,
+    meteor_eval,
+)
+from advanced_judge import (
+    DEFAULT_MAX_HTML_CHARS,
+    DEFAULT_MAX_PARSED_CHARS,
+    DEFAULT_TIMEOUT_SECONDS,
+    evaluate_without_gold,
+)
+from advanced_judge_with_gs import (
+    DEFAULT_MAX_GOLD_CHARS,
+    DEFAULT_MAX_PARSED_CHARS as DEFAULT_GS_JUDGE_PARSED_CHARS,
+    DEFAULT_MODEL_NAME as DEFAULT_GS_JUDGE_MODEL,
+    DEFAULT_TIMEOUT_SECONDS as DEFAULT_GS_JUDGE_TIMEOUT,
+    evaluate_with_gold,
+)
 
 
 # impedisce al server di aprire troppi browser simultaneamente se il grader spamma le richieste
@@ -41,6 +61,33 @@ class ParseRequest(BaseModel):
 class EvaluateRequest(BaseModel):
     parsed_text: str
     gold_text: str
+
+class AdvancedEvaluateRequest(BaseModel):
+    parsed_text: str = Field(..., min_length=1, max_length=2_000_000)
+    gold_text: str = Field(..., min_length=1, max_length=2_000_000)
+    language: Literal["en", "it"] = "en"
+
+class NoGSJudgeRequest(BaseModel):
+    html_text: str = Field(..., min_length=1, max_length=5_000_000)
+    parsed_text: str = Field(..., max_length=2_000_000)
+    model_name: Optional[str] = Field(default=None, min_length=1, max_length=128)
+    timeout_seconds: float = Field(default=DEFAULT_TIMEOUT_SECONDS, ge=30, le=600)
+    max_html_chars: int = Field(default=DEFAULT_MAX_HTML_CHARS, ge=500, le=12_000)
+    max_parsed_chars: int = Field(default=DEFAULT_MAX_PARSED_CHARS, ge=500, le=12_000)
+
+    class Config:
+        extra = "forbid"
+
+class AdvancedGSJudgeRequest(BaseModel):
+    parsed_text: str = Field(..., max_length=2_000_000)
+    gold_text: str = Field(..., min_length=1, max_length=2_000_000)
+    model_name: Optional[str] = Field(default=None, min_length=1, max_length=128)
+    timeout_seconds: float = Field(default=DEFAULT_GS_JUDGE_TIMEOUT, ge=30, le=600)
+    max_parsed_chars: int = Field(default=DEFAULT_GS_JUDGE_PARSED_CHARS, ge=500, le=12_000)
+    max_gold_chars: int = Field(default=DEFAULT_MAX_GOLD_CHARS, ge=500, le=12_000)
+
+    class Config:
+        extra = "forbid"
 
 class AddWebResourceRequest(BaseModel):
     url: str
@@ -202,6 +249,80 @@ async def evaluate_judge_api(data: EvaluateRequest):
     if not data.parsed_text or not data.gold_text:
         raise HTTPException(status_code=400, detail="I testi sono vuoti")
     return await esegui_llm_judge(data.parsed_text, data.gold_text)
+
+# -----------------------
+# POST /evaluate_advanced
+# -----------------------
+@app.post("/evaluate_advanced")
+async def evaluate_advanced_api(data: AdvancedEvaluateRequest):
+    try:
+        
+        meteor = await asyncio.to_thread(
+            meteor_eval, data.parsed_text, data.gold_text, data.language
+        )
+        bertscore = await asyncio.to_thread(
+            bertscore_eval, data.parsed_text, data.gold_text
+        )
+    except MetricDependencyError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except MetricInputSizeError as exc:
+        raise HTTPException(status_code=413, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    return {**meteor, **bertscore}
+
+# -----------------------
+# POST /evaluate_judge_no_gs
+# -----------------------
+@app.post("/evaluate_judge_no_gs")
+async def evaluate_judge_no_gs_api(data: NoGSJudgeRequest):
+    result = await evaluate_without_gold(
+        data.html_text,
+        data.parsed_text,
+        **({"model_name": data.model_name} if data.model_name else {}),
+        timeout_seconds=data.timeout_seconds,
+        max_html_chars=data.max_html_chars,
+        max_parsed_chars=data.max_parsed_chars,
+    )
+    status_codes = {
+        "success": 200,
+        "invalid_input": 422,
+        "timeout": 504,
+        "request_error": 503,
+        "model_error": 502,
+        "invalid_response": 502,
+    }
+    return JSONResponse(
+        status_code=status_codes.get(result.get("status"), 502),
+        content=result,
+    )
+
+# -----------------------
+# POST /evaluate_judge_with_gs_advanced
+# -----------------------
+@app.post("/evaluate_judge_with_gs_advanced")
+async def evaluate_judge_with_gs_advanced_api(data: AdvancedGSJudgeRequest):
+    result = await evaluate_with_gold(
+        data.parsed_text,
+        data.gold_text,
+        model_name=(data.model_name or DEFAULT_GS_JUDGE_MODEL),
+        timeout_seconds=data.timeout_seconds,
+        max_parsed_chars=data.max_parsed_chars,
+        max_gold_chars=data.max_gold_chars,
+    )
+    status_codes = {
+        "success": 200,
+        "invalid_input": 422,
+        "timeout": 504,
+        "request_error": 503,
+        "model_error": 502,
+        "invalid_response": 502,
+    }
+    return JSONResponse(
+        status_code=status_codes.get(result.get("status"), 502),
+        content=result,
+    )
 
 # -----------------------
 # GET /full_gs_eval

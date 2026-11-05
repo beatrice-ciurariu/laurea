@@ -1,0 +1,8 @@
+# Additive evaluation dependencies for the backend's Python 3.10 image.
+# PyTorch is intentionally the CPU wheel; Docker installs it from the official
+# PyTorch CPU wheel index, so no CUDA packages are needed.
+torch==2.5.1+cpu
+numpy==1.26.4
+nltk==3.9.2
+bert-score==0.3.13
+transformers==4.44.2
